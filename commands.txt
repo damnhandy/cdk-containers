@@ -1,0 +1,5 @@
+skopeo copy docker://registry.access.redhat.com/ubi8/ubi-minimal:8.5 docker-archive:ubi-minimal.tar --override-os linux 
+
+skopeo copy docker://docker.io/node:0.10-slim docker-archive:node-0.10-slim.tar --override-os linux
+
+0.10-slim

@@ -7,7 +7,6 @@ import { AssetStaging, IAsset, Stack, Stage } from "@aws-cdk/core";
 // keep this import separate from other imports to reduce chance for merge conflicts with v2-main
 // eslint-disable-next-line no-duplicate-imports, import/order
 import { Construct as CoreConstruct } from "@aws-cdk/core";
-import { CustomStackSynthesizer } from "./custom-stack-synthesizer";
 
 /**
  * Options for SkopeoImageAsset
@@ -74,11 +73,10 @@ export class SkopeoImageAsset extends CoreConstruct implements IAsset {
       : stagedTarball.absoluteStagedPath;
 
     const stack = Stack.of(this);
-    const synthesizer = stack.synthesizer as CustomStackSynthesizer;
+    const synthesizer = stack.synthesizer;
     const location = synthesizer.addDockerImageAsset({
       sourceHash: stagedTarball.assetHash,
-      executable: ["sh", "-c", `docker load -i ${relativePathInOutDir} | echo "busybox"`],
-      repository: props.repository
+      executable: ["sh", "-c", `docker load -i ${relativePathInOutDir} | sed "s/Loaded image: //g"`]
     });
     this.repository = props.repository;
     this.imageUri = location.imageUri;
