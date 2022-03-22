@@ -1,0 +1,16 @@
+build
+coverage
+*/.gradle/
+*/gradle
+*/gradlew
+*/gradlew.bat
+*/.idea
+.idea
+cdk.out
+springboot-app/bin
+.settings/
+.vscode/
+.husky
+*/vendor/*
+*.d.ts
+buildspec.yml

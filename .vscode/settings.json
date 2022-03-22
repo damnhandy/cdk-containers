@@ -1,0 +1,16 @@
+{
+    "prettier.requireConfig": true,
+    "editor.formatOnSave" : true,
+    "editor.formatOnPaste" : true,
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "eslint.enable": true,
+    "eslint.lintTask.enable": true,
+    "eslint.format.enable": true,
+    "cSpell.words": [
+        "cfnify",
+        "cxschema",
+        "Instrinsics",
+        "Outdir",
+        "Skopeo"
+    ]
+}

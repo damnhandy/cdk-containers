@@ -1,0 +1,24 @@
+*.js
+!jest.config.js
+!jest.env.js
+*.d.ts
+node_modules
+out
+coverage
+*.tar
+*.zip
+*.gz
+*.jar
+*.xz
+# CDK asset staging directory
+.cdk.staging
+cdk.out/
+cdk.out.*
+
+# Parcel default cache directory
+.parcel-cache
+
+*.swp
+msg
+.idea/
+.nix-node/
