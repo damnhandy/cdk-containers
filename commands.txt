@@ -1,5 +1,9 @@
 skopeo copy docker://registry.access.redhat.com/ubi8/ubi-minimal:8.5 docker-archive:ubi-minimal.tar --override-os linux 
-
 skopeo copy docker://docker.io/node:0.10-slim docker-archive:node-0.10-slim.tar --override-os linux
+skopeo copy docker://docker.io/node:16 docker-archive:node-16.tar --override-os linux
+
+skopeo copy docker://registry.access.redhat.com/ubi8/ubi-minimal:8.5 docker-daemon:registry.access.redhat.com/ubi8/ubi-minimal:8.5 --override-os linux 
+skopeo copy docker://docker.io/node:0.10-slim docker-daemon:docker.io/node:0.10-slim --override-os linux
+skopeo copy docker://docker.io/node:16 docker-daemon:docker.io/node:16 --override-os linux
 
 0.10-slim

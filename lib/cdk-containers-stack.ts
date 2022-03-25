@@ -41,8 +41,6 @@ export class CdkContainersStack extends cdk.Stack {
       tarballFile: path.resolve(__dirname, "../node-0.10-slim.tar")
     });
 
-    new TarballImageAsset(this, "Node16Image", {
-      tarballFile: path.resolve(__dirname, "../node-16.tar")
-    });
+    new SkopeoImageAsset(this, "Node16Image", {});
   }
 }
