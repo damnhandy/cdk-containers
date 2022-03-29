@@ -1,12 +1,16 @@
+import * as cp from "child_process";
 import * as fs from "fs";
 import * as path from "path";
 import * as ecr from "@aws-cdk/aws-ecr";
-import { IRepository } from "@aws-cdk/aws-ecr";
-import { AssetStaging, IAsset, ISynthesisSession, Stack, Stage } from "@aws-cdk/core";
-
-// keep this import separate from other imports to reduce chance for merge conflicts with v2-main
-// eslint-disable-next-line no-duplicate-imports, import/order
-import { Construct as CoreConstruct } from "@aws-cdk/core";
+import {
+  AssetHashType,
+  AssetStaging,
+  Construct,
+  IAsset,
+  ISynthesisSession,
+  Stack,
+  Stage
+} from "@aws-cdk/core";
 
 /**
  * Options for SkopeoImageAsset
@@ -21,9 +25,10 @@ export interface SkopeoImageAssetProps {
  *
  * The image will loaded from an existing tarball and uploaded to an ECR repository.
  */
-export class SkopeoImageAsset extends CoreConstruct implements IAsset {
+export class SkopeoImageAsset extends Construct implements IAsset {
   public sourceImageUri: string;
 
+  public tag = "latest";
   /**
    * The full URI of the image (including a tag). Use this reference to pull
    * the asset.
@@ -41,12 +46,23 @@ export class SkopeoImageAsset extends CoreConstruct implements IAsset {
    * hash has changed.
    */
   public readonly assetHash: string;
-
-  constructor(scope: CoreConstruct, id: string, props: SkopeoImageAssetProps) {
+  public readonly imageId: string;
+  constructor(scope: Construct, id: string, props: SkopeoImageAssetProps) {
     super(scope, id);
     this.sourceImageUri = props.sourceImageUri;
+    this.tag = props.tag;
+
+    if (!fs.existsSync("./.cdk.staging")) {
+      fs.mkdirSync("./.cdk.staging");
+    }
+    cp.execSync(`docker pull ${this.sourceImageUri}:${this.tag}`);
+    this.imageId = cp
+      .execSync(`docker inspect --format='{{.Id}}' ${this.sourceImageUri}:${this.tag}`, {
+        encoding: "utf8"
+      })
+      .trim();
     if (!fs.existsSync(this.tarBallLocation)) {
-      console.log("");
+      cp.execSync(`docker save ${this.sourceImageUri} -o ${this.tarBallLocation}`);
     }
 
     if (!fs.existsSync(this.tarBallLocation)) {
@@ -80,10 +96,14 @@ export class SkopeoImageAsset extends CoreConstruct implements IAsset {
 
   get sourceImageName(): string {
     const uri = new URL(`docker://${this.sourceImageUri}`);
-    return uri.pathname;
+    const paths = uri.pathname.split("/");
+    if (paths.length > 0) {
+      return paths[paths.length - 1];
+    }
+    return paths[0];
   }
 
   get tarBallLocation(): string {
-    return `./.cdk.staging/${this.sourceImageName}.tar`;
+    return `./.cdk.staging/${this.imageId.split(":")[1]}.tar`;
   }
 }
