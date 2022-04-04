@@ -2,12 +2,21 @@ import * as cp from "child_process";
 import * as fs from "fs";
 import * as path from "path";
 import * as ecr from "@aws-cdk/aws-ecr";
-import { AssetStaging, Construct, IAsset, ISynthesisSession, Stack, Stage } from "@aws-cdk/core";
+import {
+  AssetHashType,
+  AssetStaging,
+  Construct,
+  DockerImage,
+  IAsset,
+  ISynthesisSession,
+  Stack,
+  Stage
+} from "@aws-cdk/core";
 
 /**
  * Options for SkopeoImageAsset
  */
-export interface SkopeoImageAssetProps {
+export interface RemoteImageAssetProps {
   readonly sourceImageUri: string;
   readonly tag: string;
 }
@@ -17,7 +26,7 @@ export interface SkopeoImageAssetProps {
  *
  * The image will loaded from an existing tarball and uploaded to an ECR repository.
  */
-export class SkopeoImageAsset extends Construct implements IAsset {
+export class RemoteImageAsset extends Construct implements IAsset {
   public sourceImageUri: string;
 
   public tag = "latest";
@@ -42,7 +51,7 @@ export class SkopeoImageAsset extends Construct implements IAsset {
 
   stagingDir = path.resolve(__dirname, path.join(process.cwd(), "./.cdk.staging"));
 
-  constructor(scope: Construct, id: string, props: SkopeoImageAssetProps) {
+  constructor(scope: Construct, id: string, props: RemoteImageAssetProps) {
     super(scope, id);
     this.sourceImageUri = props.sourceImageUri;
     this.tag = props.tag;
@@ -51,14 +60,7 @@ export class SkopeoImageAsset extends Construct implements IAsset {
     if (!fs.existsSync(this.stagingDir)) {
       fs.mkdirSync(this.stagingDir);
     }
-
-    this.imageId = cp
-      .execSync(`skopeo inspect --format='{{.Digest}}' ${this.sourceImageUri}:${this.tag}`, {
-        encoding: "utf8"
-      })
-      .trim();
-
-    this.containerRuntimeExec(["copy", `${this.sourceImageUri}:${this.tag}`], {
+    this.containerRuntimeExec(["pull", `${this.sourceImageUri}:${this.tag}`], {
       stdio: [
         // show Docker output
         "ignore", // ignore stdio
@@ -66,12 +68,50 @@ export class SkopeoImageAsset extends Construct implements IAsset {
         "inherit" // inherit stderr
       ]
     });
+    this.imageId = cp
+      .execSync(`docker inspect --format='{{.Id}}' ${this.sourceImageUri}:${this.tag}`, {
+        encoding: "utf8"
+      })
+      .trim();
+    if (!fs.existsSync(this.tarBallLocation)) {
+      this.containerRuntimeExec(["save", this.sourceImageUri, "-o", this.tarBallLocation], {
+        stdio: [
+          // show Docker output
+          "ignore", // ignore stdio
+          process.stderr, // redirect stdout to stderr
+          "inherit" // inherit stderr
+        ]
+      });
+    }
 
     if (!fs.existsSync(this.tarBallLocation)) {
       throw new Error(`Cannot find file at ${this.tarBallLocation}`);
     }
 
     const stagedTarball = new AssetStaging(this, "Staging", {
+      assetHashType: AssetHashType.CUSTOM,
+      bundling: {
+        image: DockerImage.fromRegistry("quay.io/skopeo/stable"),
+        local: {
+          tryBundle(outputDir: string) {
+            try {
+              cp.spawnSync("command -v skopeo");
+            } catch {
+              return false;
+            }
+
+            containerRuntimeExec(["save", this.sourceImageUri, "-o", this.tarBallLocation], {
+              stdio: [
+                // show Docker output
+                "ignore", // ignore stdio
+                process.stderr, // redirect stdout to stderr
+                "inherit" // inherit stderr
+              ]
+            });
+            return true;
+          }
+        }
+      },
       sourcePath: this.tarBallLocation
     });
 
@@ -86,12 +126,7 @@ export class SkopeoImageAsset extends Construct implements IAsset {
     const synthesizer = stack.synthesizer;
     const location = synthesizer.addDockerImageAsset({
       sourceHash: stagedTarball.assetHash,
-      executable: [
-        "sh",
-        "-c",
-        `skopeo copy ${this.sourceImageUri}:${this.tag} docker-archive:${relativePathInOutDir}`,
-        `echo "${this.sourceImageUri}:${this.tag}"`
-      ]
+      executable: ["sh", "-c", `docker load -i ${relativePathInOutDir} | sed "s/Loaded image: //g"`]
     });
     this.imageUri = location.imageUri;
   }
@@ -113,76 +148,43 @@ export class SkopeoImageAsset extends Construct implements IAsset {
   get tarBallLocation(): string {
     return `${this.stagingDir}/${this.imageId.split(":")[1]}.tar`;
   }
+}
 
-  /**
-   *
-   * @param args
-   * @param options
-   * @returns
-   */
-  containerRuntimeExec(args: string[], options?: cp.SpawnSyncOptions) {
-    const prog = process.env.CDK_DOCKER ?? "docker";
-    const proc = cp.spawnSync(
-      prog,
-      args,
-      options ?? {
-        stdio: [
-          // show Docker output
-          "ignore", // ignore stdio
-          process.stderr, // redirect stdout to stderr
-          "inherit" // inherit stderr
-        ]
-      }
-    );
-
-    if (proc.error) {
-      throw proc.error;
+/**
+ *
+ * @param args
+ * @param options
+ * @returns
+ */
+export function containerRuntimeExec(args: string[], options?: cp.SpawnSyncOptions) {
+  const prog = process.env.CDK_DOCKER ?? "docker";
+  const proc = cp.spawnSync(
+    prog,
+    args,
+    options ?? {
+      stdio: [
+        // show Docker output
+        "ignore", // ignore stdio
+        process.stderr, // redirect stdout to stderr
+        "inherit" // inherit stderr
+      ]
     }
+  );
 
-    if (proc.status !== 0) {
-      if (proc.stdout || proc.stderr) {
-        throw new Error(
-          `[Status ${proc.status}] stdout: ${proc.stdout
-            ?.toString()
-            .trim()}\n\n\nstderr: ${proc.stderr?.toString().trim()}`
-        );
-      }
-      throw new Error(`${prog} exited with status ${proc.status}`);
-    }
-
-    return proc;
+  if (proc.error) {
+    throw proc.error;
   }
 
-  skopeoRuntimeExec(args: string[], options?: cp.SpawnSyncOptions) {
-    const prog = "skopeo";
-    const proc = cp.spawnSync(
-      prog,
-      args,
-      options ?? {
-        stdio: [
-          // show Docker output
-          "ignore", // ignore stdio
-          process.stderr, // redirect stdout to stderr
-          "inherit" // inherit stderr
-        ]
-      }
-    );
-
-    if (proc.error) {
-      throw proc.error;
+  if (proc.status !== 0) {
+    if (proc.stdout || proc.stderr) {
+      throw new Error(
+        `[Status ${proc.status}] stdout: ${proc.stdout
+          ?.toString()
+          .trim()}\n\n\nstderr: ${proc.stderr?.toString().trim()}`
+      );
     }
-
-    if (proc.status !== 0) {
-      if (proc.stdout || proc.stderr) {
-        throw new Error(
-          `[Status ${proc.status}] stdout: ${proc.stdout
-            ?.toString()
-            .trim()}\n\n\nstderr: ${proc.stderr?.toString().trim()}`
-        );
-      }
-      throw new Error(`${prog} exited with status ${proc.status}`);
-    }
-
-    return proc;
+    throw new Error(`${prog} exited with status ${proc.status}`);
   }
+
+  return proc;
 }
