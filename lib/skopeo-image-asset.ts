@@ -2,7 +2,15 @@ import * as cp from "child_process";
 import * as fs from "fs";
 import * as path from "path";
 import * as ecr from "@aws-cdk/aws-ecr";
-import { AssetStaging, Construct, IAsset, ISynthesisSession, Stack, Stage } from "@aws-cdk/core";
+import {
+  AssetHashType,
+  AssetStaging,
+  Construct,
+  IAsset,
+  ISynthesisSession,
+  Stack,
+  Stage
+} from "@aws-cdk/core";
 
 /**
  * Options for SkopeoImageAsset
@@ -52,35 +60,17 @@ export class SkopeoImageAsset extends Construct implements IAsset {
       fs.mkdirSync(this.stagingDir);
     }
 
-    this.imageId = cp
-      .execSync(`skopeo inspect --format='{{.Digest}}' ${this.sourceImageUri}:${this.tag}`, {
-        encoding: "utf8"
-      })
-      .trim();
-
-    this.containerRuntimeExec(["copy", `${this.sourceImageUri}:${this.tag}`], {
-      stdio: [
-        // show Docker output
-        "ignore", // ignore stdio
-        process.stderr, // redirect stdout to stderr
-        "inherit" // inherit stderr
-      ]
-    });
-
     if (!fs.existsSync(this.tarBallLocation)) {
-      throw new Error(`Cannot find file at ${this.tarBallLocation}`);
+      fs.writeFileSync(this.tarBallLocation, this.imageDigest);
     }
 
     const stagedTarball = new AssetStaging(this, "Staging", {
+      assetHash: this.imageDigest,
+      assetHashType: AssetHashType.CUSTOM,
       sourcePath: this.tarBallLocation
     });
 
     this.assetHash = stagedTarball.assetHash;
-
-    const stage = Stage.of(this);
-    const relativePathInOutDir = stage
-      ? path.relative(stage.assetOutdir, stagedTarball.absoluteStagedPath)
-      : stagedTarball.absoluteStagedPath;
 
     const stack = Stack.of(this);
     const synthesizer = stack.synthesizer;
@@ -89,8 +79,7 @@ export class SkopeoImageAsset extends Construct implements IAsset {
       executable: [
         "sh",
         "-c",
-        `skopeo copy ${this.sourceImageUri}:${this.tag} docker-archive:${relativePathInOutDir}`,
-        `echo "${this.sourceImageUri}:${this.tag}"`
+        `skopeo copy docker://${this.sourceImageUri}:${this.tag} docker-daemon:${this.sourceImageUri}:${this.tag} --override-os=linux 1> /dev/null && echo "${this.sourceImageUri}:${this.tag}"`
       ]
     });
     this.imageUri = location.imageUri;
@@ -111,7 +100,18 @@ export class SkopeoImageAsset extends Construct implements IAsset {
   }
 
   get tarBallLocation(): string {
-    return `${this.stagingDir}/${this.imageId.split(":")[1]}.tar`;
+    return `${this.stagingDir}/${this.imageDigest.split(":")[1]}.tar`;
+  }
+
+  get imageDigest(): string {
+    return cp
+      .execSync(
+        `skopeo inspect --format='{{.Digest}}' docker://${this.sourceImageUri}:${this.tag} --override-os=linux`,
+        {
+          encoding: "utf8"
+        }
+      )
+      .trim();
   }
 
   /**
