@@ -51,6 +51,7 @@
   "dependencies": {
     "@aws-cdk/aws-ecr": "1.149.0",
     "@aws-cdk/aws-ecr-assets": "1.149.0",
+    "@aws-cdk/aws-s3-assets": "1.149.0",
     "@aws-cdk/aws-ecs": "1.149.0",
     "@aws-cdk/aws-lambda": "1.149.0",
     "@aws-cdk/cloud-assembly-schema": "1.149.0",
