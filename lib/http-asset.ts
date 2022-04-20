@@ -29,7 +29,11 @@ export class HttpAsset extends Construct implements IAsset {
 
     const location = stack.synthesizer.addFileAsset({
       sourceHash: this.assetHash,
-      executable: ["sh", "-c", `curl -L ${props.artifactUrl} -o ${fileName}`]
+      executable: [
+        "sh",
+        "-c",
+        `curl -L ${props.artifactUrl} -o ${fileName} 1> /dev/null && echo "${fileName}"`
+      ]
     });
   }
 

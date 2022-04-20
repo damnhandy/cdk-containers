@@ -48,34 +48,15 @@ export class SkopeoImageAsset extends Construct implements IAsset {
   public readonly assetHash: string;
   public readonly imageId: string;
 
-  stagingDir = path.resolve(__dirname, path.join(process.cwd(), "./.cdk.staging"));
-
   constructor(scope: Construct, id: string, props: SkopeoImageAssetProps) {
     super(scope, id);
     this.sourceImageUri = props.sourceImageUri;
     this.tag = props.tag;
 
-    console.log(this.stagingDir);
-    if (!fs.existsSync(this.stagingDir)) {
-      fs.mkdirSync(this.stagingDir);
-    }
+    this.assetHash = this.imageDigest.split(":")[1];
 
-    if (!fs.existsSync(this.tarBallLocation)) {
-      fs.writeFileSync(this.tarBallLocation, this.imageDigest);
-    }
-
-    const stagedTarball = new AssetStaging(this, "Staging", {
-      assetHash: this.imageDigest,
-      assetHashType: AssetHashType.CUSTOM,
-      sourcePath: this.tarBallLocation
-    });
-
-    this.assetHash = stagedTarball.assetHash;
-
-    const stack = Stack.of(this);
-    const synthesizer = stack.synthesizer;
-    const location = synthesizer.addDockerImageAsset({
-      sourceHash: stagedTarball.assetHash,
+    const location = Stack.of(this).synthesizer.addDockerImageAsset({
+      sourceHash: this.assetHash,
       executable: [
         "sh",
         "-c",
@@ -83,11 +64,6 @@ export class SkopeoImageAsset extends Construct implements IAsset {
       ]
     });
     this.imageUri = location.imageUri;
-  }
-
-  protected onSynthesize(session: ISynthesisSession) {
-    super.onSynthesize(session);
-    console.log("docker pull the_image");
   }
 
   get sourceImageName(): string {
@@ -99,10 +75,6 @@ export class SkopeoImageAsset extends Construct implements IAsset {
     return paths[0];
   }
 
-  get tarBallLocation(): string {
-    return `${this.stagingDir}/${this.imageDigest.split(":")[1]}.tar`;
-  }
-
   get imageDigest(): string {
     return cp
       .execSync(
@@ -112,77 +84,5 @@ export class SkopeoImageAsset extends Construct implements IAsset {
         }
       )
       .trim();
-  }
-
-  /**
-   *
-   * @param args
-   * @param options
-   * @returns
-   */
-  containerRuntimeExec(args: string[], options?: cp.SpawnSyncOptions) {
-    const prog = process.env.CDK_DOCKER ?? "docker";
-    const proc = cp.spawnSync(
-      prog,
-      args,
-      options ?? {
-        stdio: [
-          // show Docker output
-          "ignore", // ignore stdio
-          process.stderr, // redirect stdout to stderr
-          "inherit" // inherit stderr
-        ]
-      }
-    );
-
-    if (proc.error) {
-      throw proc.error;
-    }
-
-    if (proc.status !== 0) {
-      if (proc.stdout || proc.stderr) {
-        throw new Error(
-          `[Status ${proc.status}] stdout: ${proc.stdout
-            ?.toString()
-            .trim()}\n\n\nstderr: ${proc.stderr?.toString().trim()}`
-        );
-      }
-      throw new Error(`${prog} exited with status ${proc.status}`);
-    }
-
-    return proc;
-  }
-
-  skopeoRuntimeExec(args: string[], options?: cp.SpawnSyncOptions) {
-    const prog = "skopeo";
-    const proc = cp.spawnSync(
-      prog,
-      args,
-      options ?? {
-        stdio: [
-          // show Docker output
-          "ignore", // ignore stdio
-          process.stderr, // redirect stdout to stderr
-          "inherit" // inherit stderr
-        ]
-      }
-    );
-
-    if (proc.error) {
-      throw proc.error;
-    }
-
-    if (proc.status !== 0) {
-      if (proc.stdout || proc.stderr) {
-        throw new Error(
-          `[Status ${proc.status}] stdout: ${proc.stdout
-            ?.toString()
-            .trim()}\n\n\nstderr: ${proc.stderr?.toString().trim()}`
-        );
-      }
-      throw new Error(`${prog} exited with status ${proc.status}`);
-    }
-
-    return proc;
   }
 }

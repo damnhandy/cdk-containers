@@ -1,8 +1,8 @@
 import * as path from "path";
-import { DockerImageAsset } from "@aws-cdk/aws-ecr-assets";
+//import { DockerImageAsset } from "@aws-cdk/aws-ecr-assets";
 import * as cdk from "@aws-cdk/core";
 import { HttpAsset } from "./http-asset";
-import { SkopeoImageAsset } from "./skopeo-image-asset";
+//import { SkopeoImageAsset } from "./skopeo-image-asset";
 export class CdkContainersStack extends cdk.Stack {
   constructor(scope: cdk.Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
@@ -12,14 +12,14 @@ export class CdkContainersStack extends cdk.Stack {
     //   tag: "16"
     // });
 
-    new DockerImageAsset(this, "DockerImage", {
-      directory: path.resolve(__dirname, path.join(process.cwd(), "./container"))
-    });
+    // new DockerImageAsset(this, "DockerImage", {
+    //   directory: path.resolve(__dirname, path.join(process.cwd(), "./container"))
+    // });
 
-    new SkopeoImageAsset(this, "TestImage", {
-      sourceImageUri: "registry.access.redhat.com/ubi8/ubi-minimal",
-      tag: "8.5"
-    });
+    // new SkopeoImageAsset(this, "TestImage", {
+    //   sourceImageUri: "registry.access.redhat.com/ubi8/ubi-minimal",
+    //   tag: "8.5"
+    // });
 
     new HttpAsset(this, "Packer", {
       artifactUrl: "https://releases.hashicorp.com/packer/1.8.0/packer_1.8.0_darwin_amd64.zip",
